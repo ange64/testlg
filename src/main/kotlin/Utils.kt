@@ -85,7 +85,6 @@ val Vector3f.imut : Vector3fc
 
 fun Vector3fc.toFloatArray() = floatArrayOf(x(),y(),z(),1f)
 
-
 inline fun <R> useStack(block: (stack: MemoryStack) -> R): R {
     return stackPush().use(block)
 }

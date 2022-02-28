@@ -1,4 +1,5 @@
 import org.lwjgl.opengl.GL20.*
+import org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_SRGB
 import kotlin.time.Duration
 import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
@@ -15,6 +16,8 @@ abstract class App() : EventListener(){
         get() =  now.inSeconds
     val millisec : Double
         get() = now.inMilliseconds
+    var wireFrame = false
+        private set
 
     init {
         window.initCallbacks(EventHandler)
@@ -29,6 +32,7 @@ abstract class App() : EventListener(){
     fun launch() {
         init()
         //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+        glEnable(GL_FRAMEBUFFER_SRGB);
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
         glFrontFace(GL_CCW);
@@ -51,6 +55,19 @@ abstract class App() : EventListener(){
         window.destroy()
         dispose()
     }
+
+    fun toggleWireFrame(){
+        if( wireFrame) {
+            wireFrame = false
+            glPolygonMode(GL_FRONT, GL_FILL);
+            glPolygonMode(GL_BACK, GL_FILL)
+        } else {
+            wireFrame = true
+            glPolygonMode(GL_FRONT, GL_LINE);
+            glPolygonMode(GL_BACK, GL_LINE);
+        }
+    }
+
 
     fun stop(){
         shouldRun = false

@@ -5,21 +5,20 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 
 class AppIml : App() {
 
     private val vao = ModelVao()
-    private val shader = PhongShader()
+    private val shader = LightingShader(vertexShad, objectFragShad)
     private val models = mutableListOf<Model>()
-    private val camera = Camera(90f, 100f, 16.0f / 9)
+    private val camera = FpsCamera(90f, 100f, 16.0f / 9)
 
     private val light = PointLight(
         Vector3f(WHITE), range = 200f, pos = Vector3f(0f, 5f, 0f),
     )
 
     private val spotLight = SpotLight(
-        Vector3f(0F), cutAngle = 15f.rad(),diffuse = 1f
+        Vector3f(0F), cutAngle = 15f.rad(), diffuse = 1f
     )
 
     private val lightModel = Cube(material = Material.whiteCube)
@@ -28,17 +27,14 @@ class AppIml : App() {
 
     override fun init() {
         camera.setPos(0f, 2f, 0f)
-        //lightSource.scale(30f,30f,30f)
         genGround()
         for (i in 0..10) genBoxes(15f)
         models.add(lightModel)
         lightModel.scale(0.3f)
         lightModel.setTranslate(light.pos)
-        lightModel.material.emissColor.set(light.color)
         val sphere = Sphere(Material.smoothGray)
-        sphere.translate(10f,10f,10f)
+        sphere.translate(10f, 10f, 10f)
         models.add(sphere)
-
         shader.use()
         shader.addLight(light)
         shader.addLight(spotLight)
@@ -53,16 +49,15 @@ class AppIml : App() {
 
     private fun update(delta: Duration) {
         camera.update(delta)
-        val x =  sin(elapsed.elapsedNow().inSeconds).toFloat()
-        val z =  cos(elapsed.elapsedNow().inSeconds).toFloat()
+        val x = sin(elapsed.elapsedNow().inSeconds).toFloat()
+        val z = cos(elapsed.elapsedNow().inSeconds).toFloat()
         spotLight.pos.set(camera.pos)
         spotLight.dir.set(camera.dir)
         shader.updateLightDir(spotLight)
         shader.updateLightPos(spotLight)
 
-        // light.color.set(x,1f,z)
-        //shader.updateLightColor(light)
-        //lightModel.material.emissColor.set(light.color)
+        light.color.set(x, 1f, z)
+        shader.updateLightColor(light)
     }
 
     private fun render(viewProj: Matrix4fc) {
@@ -80,13 +75,7 @@ class AppIml : App() {
     }
 
     private fun genGround() {
-        val nb = 101f
-        val ground = Cube(
-            material = Material.smoothGray
-        )
-
-        ground.scale(nb, 1f, nb)
-        ground.translate(y = -0.5f)
+        val ground = Model(objToModelData("wood_floor.obj"), Material.woodFloor)
         models.add(ground)
     }
 
@@ -95,7 +84,7 @@ class AppIml : App() {
         val x = rnd.nextFloat().mapOne(-mapSize, mapSize)
         val z = rnd.nextFloat().mapOne(-mapSize, mapSize)
         val cube = Cube(material = Material.woodCrate)
-        /// cube.rotate(PI/2)
+         cube.rotate(rnd.nextFloat() * PI,rnd.nextFloat() * PI,rnd.nextFloat() * PI)
 
         cube.setTranslate(x.rounded(), size / 2, z.rounded())
         models.add(cube)
@@ -118,6 +107,7 @@ class AppIml : App() {
     override fun keyPressed(keys: Set<Key>, mods: Modifiers) {
         if (Key.C in keys) camera.zoom(2f)
         if (Key.Escape in keys) window.freeCursor()
+        if( Key.Z in keys) toggleWireFrame()
     }
 
     override fun keyReleased(keys: Set<Key>, mods: Modifiers) {
@@ -129,8 +119,7 @@ class AppIml : App() {
     }
 
     override fun resized(width: Int, height: Int) {
-        val aspect = width.toFloat() / height
-        camera.setAspect(aspect)
+        camera.aspect = width.toFloat() / height
     }
 }
 

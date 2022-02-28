@@ -1,3 +1,4 @@
+import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector3fc
 import kotlin.math.cos
@@ -20,6 +21,7 @@ interface Light {
 
 interface MovableLight : Light {
     val pos: Vector3f
+
 }
 
 interface OrientableLight : Light {
@@ -41,35 +43,29 @@ class SunLight(
 
 class PointLight(
     override val color: Vector3f,
-    override val ambient: Float = 0.5f,
-    override val diffuse: Float = 0.2f,
-    override val specular: Float = 0.2f,
+    override val ambient: Float = 0.1f,
+    override val diffuse: Float = 1f,
+    override val specular: Float = 1f,
     range: Float,
     override val pos: Vector3f = Vector3f(),
 ) : MovableLight {
 
-    // linear / quadratic attenuation values
-    // range = x, linear = y, quadratic = z
-    private val ranLinQuad = parametersFromRange(range)
+    private val rangeAndLinear = parametersFromRange(range)
 
     val range : Float
-        get() = ranLinQuad.x
+        get() = rangeAndLinear.x
     val linear : Float
-        get() = ranLinQuad.y
-    val quadratic : Float
-        get() = ranLinQuad.z
+        get() = rangeAndLinear.y
 
     companion object {
         private const val baselineRange = 3250f // range of the light
-        private const val baselineLinear = 0.0014f // linear attenuation
-        private const val baselineQuadratic = 0.000007f // quadratic attenuation
+        private const val baselineLinear = 0.014f // linear attenuation
 
-        fun parametersFromRange(range: Float): Vector3f {
+        fun parametersFromRange(range: Float): Vector2f {
             val daddy = range / baselineRange
-            val ranLinQuad = Vector3f()
+            val ranLinQuad = Vector2f()
             ranLinQuad.x = range
             ranLinQuad.y = baselineLinear / daddy
-            ranLinQuad.z = baselineQuadratic / (daddy * daddy)
             return ranLinQuad
         }
     }

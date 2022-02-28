@@ -61,6 +61,11 @@ class Texture(
         glActiveTexture(activeTarget)
         glBindTexture(GL_TEXTURE_2D, textureId)
     }
+
+    companion object{
+        val BLACK = Texture("textures/black.png")
+        val WHITE = Texture("textures/white.png")
+    }
 }
 
 class Image(path: String) {
@@ -103,5 +108,4 @@ enum class MagFilter(val value: Int) {
     LINEAR(GL_LINEAR),
     NEAREST(GL_NEAREST),
 }
-
 

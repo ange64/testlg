@@ -1,6 +1,5 @@
 import org.joml.*
 import org.lwjgl.opengl.GL20.*
-import java.lang.IllegalArgumentException
 import java.rmi.activation.UnknownObjectException
 
 open class Shader(vertexSource: String, fragmentSource: String) {
@@ -56,7 +55,8 @@ open class Shader(vertexSource: String, fragmentSource: String) {
     private fun locate(name: String) = glGetUniformLocation(program, name)
 }
 
-class PhongShader : Shader(vertexShad, objectFragShad) {
+open class LightingShader(vertexSource: String, fragmentSource: String) :
+    Shader(vertexSource, fragmentSource) {
 
     private val sunLights = "sunLights"
     private val spotLights = "spotLights"
@@ -67,6 +67,44 @@ class PhongShader : Shader(vertexShad, objectFragShad) {
     private var pointIndex = 0
 
     private val indexMap = mutableMapOf<Light, Int>()
+
+    fun updateLightPos(light: MovableLight) {
+        when (light) {
+            is SpotLight -> {
+                setUniform("$spotLights[${indexOf(light)}].position", light.pos)
+            }
+            is PointLight -> {
+                setUniform("$pointLights[${indexOf(light)}].position", light.pos)
+            }
+        }
+    }
+
+    fun updateLightDir(light: OrientableLight) {
+        when (light) {
+            is SpotLight -> {
+                setUniform("$spotLights[${indexOf(light)}].direction", light.dir)
+            }
+            is SunLight -> {
+                setUniform("$sunLights[${indexOf(light)}].direction", light.dir)
+            }
+        }
+    }
+
+    fun updateLightColor(light: Light) {
+        var target = ""
+        when (light) {
+            is SunLight -> target = "$sunLights[${indexOf(light)}].color"
+            is SpotLight -> target = "$spotLights[${indexOf(light)}].color"
+            is PointLight -> target = "$pointLights[${indexOf(light)}].color"
+        }
+        setUniform(target, light.color)
+    }
+
+    private fun indexOf(light: Light): Int {
+        if (light !in indexMap)
+            throw UnknownObjectException("this light don't exist in the shader")
+        return indexMap[light]!!
+    }
 
     fun addLight(light: SunLight) {
         val target = "$sunLights[$sunIndex]"
@@ -94,10 +132,8 @@ class PhongShader : Shader(vertexShad, objectFragShad) {
         setUniform("$target.position", light.pos)
         setUniform("$target.range", light.range)
         setUniform("$target.linear", light.linear)
-        setUniform("$target.quadratic", light.quadratic)
         indexMap[light] = pointIndex++
         setUniform("nbPointL", pointIndex)
-
     }
 
     private fun addBaseLight(light: Light, target: String) {
@@ -107,45 +143,33 @@ class PhongShader : Shader(vertexShad, objectFragShad) {
         setUniform("$target.specular", light.specular)
     }
 
-    fun updateLightPos(light: MovableLight) {
-        when (light) {
-            is SpotLight -> {
-                setUniform("$spotLights[${indexOf(light)}].position", light.pos)
-            }
-            is PointLight -> {
-                setUniform("$pointLights[${indexOf(light)}].position", light.pos)
-            }
-        }
-    }
-
-    fun updateLightDir(light: OrientableLight) {
-        when (light) {
-            is SpotLight -> {
-                setUniform("$spotLights[${indexOf(light)}].direction", light.dir)
-            }
-            is SunLight -> {
-                setUniform("$sunLights[${indexOf(light)}].direction", light.dir)
-            }
-        }
-    }
-
-    fun updateLightColor(light: Light) {
-        var target = ""
-        when (light) {
-            is SunLight -> target = "$sunLights[$sunIndex].color"
-            is SpotLight -> target = "$spotLights[$spotIndex].color"
-            is PointLight -> target = "$pointLights[$pointIndex].color"
-        }
-        setUniform(target, light.color)
-    }
-
-    private fun indexOf(light: Light): Int {
-        if (light !in indexMap)
-            throw UnknownObjectException("this light don't exist in the shader")
-        return indexMap[light]!!
-    }
 }
 
+
+const val vertexShad = """#version 330
+layout (location=0) in vec3 position;
+layout (location=1) in vec4 color;
+layout (location=2) in vec2 texCoord;
+layout (location=3) in vec3 normal;
+
+out vec4 fColor;
+out vec2 fTexCoord;
+out vec3 fNormal;
+out vec3 fragPos;
+
+uniform mat4 projView;
+uniform mat4 model;
+uniform mat3 worldNormals;
+
+void main()
+{
+    gl_Position = projView * model * vec4(position, 1.0);
+    fColor = color;
+    fTexCoord = texCoord;
+    fNormal = normalize(worldNormals * normal);
+    fragPos = vec3(model * vec4(position, 1.0));
+}
+"""
 const val objectFragShad = """#version 330
 in vec4 fColor;
 in vec2 fTexCoord;
@@ -156,9 +180,7 @@ struct Material {
     sampler2D texture;
     sampler2D specMap;
     sampler2D emissMap;
-    vec3 emissColor;
     float shininess;
-    int hasTexture;
     int hasSpec;
     int hasEmiss;
 };
@@ -179,7 +201,6 @@ struct PointLight {
     vec3 position;
     float range;
     float linear;
-    float quadratic;
 };
 
 struct SpotLight{
@@ -217,8 +238,8 @@ float DiffStr(vec3 lightToFragDir)
 
 float SpecStr(vec3 lightToFragDir, vec3 fragToViewDir, Material mat)
 {
-    vec3 reflect = reflect(lightToFragDir, fNormal);
-    return pow(max(dot(fragToViewDir, reflect), 0.0), mat.shininess);
+    vec3 halfwayDir = normalize(-lightToFragDir + fragToViewDir);
+    return pow(max(dot(fNormal, halfwayDir), 0.0), mat.shininess);
 }
 
 // compute the base ambient + diffuse + specular shading of a light.
@@ -227,20 +248,16 @@ vec3 ambDiffSpec(
 float amb, float diff, float spec, vec3 color, vec3 lightToFragDir,
 vec3 fragToViewDir, Material mat, vec3 colorSample, vec3 specularSample)
 {
-    vec3 ambDif = vec3(0.0);
-    if (mat.hasTexture == 1)
-    {
-        float diffStr = DiffStr(lightToFragDir);
-        ambDif = (amb + diff * diffStr) * colorSample;
-    }
 
-    vec3 specular = vec3(0.0);
-    if (mat.hasSpec == 1)
-    {
-        float specStr = SpecStr(lightToFragDir, fragToViewDir, mat);
-        specular = spec * specStr * specularSample;
-    }
+    float diffStr = DiffStr(lightToFragDir);
+    vec3 ambDif = (amb + diff * diffStr) * colorSample;
 
+    vec3 specular = vec3(0);
+    if (mat.hasSpec == 1){
+       float specStr = SpecStr(lightToFragDir, fragToViewDir, mat);
+       specular.xyz = spec * specStr * specularSample;
+    }
+ 
     return (ambDif + specular) * color;
 }
 
@@ -260,7 +277,7 @@ PointLight l, vec3 fragToViewDir, Material mat, vec3 colorSample, vec3 specularS
     if(d > l.range) {
         return ZERO;
     }
-    float attenuation = 1.0/(1.0 + l.linear * d + l.quadratic * d * d);
+    float attenuation = 1.0/(1.0 + l.linear * d);
     vec3 lightToFragDir = normalize(fragPos - l.position);
     return ambDiffSpec(
     l.ambient, l.diffuse, l.specular, l.color, lightToFragDir,
@@ -286,18 +303,19 @@ SpotLight l, vec3 fragToViewDir, Material mat, vec3 colorSample, vec3 specularSa
     ) * intensity * attenu;
 }
 
+
+
 void main()
 {
     FragColor = vec4(0.0);
     
-    if (material.hasEmiss == 1){
-        FragColor.xyz += texture(material.emissMap, fTexCoord).xyz * material.emissColor;
+    if( material.hasEmiss == 1) {
+        FragColor.xyz += texture(material.emissMap, fTexCoord).xyz;
     }
-
-    vec3 fragToViewDir = normalize(viewPos - fragPos);
-    vec3 colorSample = texture(material.texture, fTexCoord).xyz;
+    vec3 colorSample = pow(texture(material.texture, fTexCoord).xyz, vec3(2.2));
     vec3 specularSample = texture(material.specMap, fTexCoord).xyz;
-
+    
+    vec3 fragToViewDir = normalize(viewPos - fragPos);
     for (int i = 0; i < nbPointL; i++){
         FragColor.xyz += CalcPointLight(
         pointLights[i], fragToViewDir, material, colorSample, specularSample
@@ -319,31 +337,8 @@ void main()
     FragColor.xyz += CalcPointLight(
         pointLights[0], fragToViewDir, material, colorSample, specularSample
     );
-}
-"""
-
-const val vertexShad = """#version 330
-layout (location=0) in vec3 position;
-layout (location=1) in vec4 color;
-layout (location=2) in vec2 texCoord;
-layout (location=3) in vec3 normal;
-
-out vec4 fColor;
-out vec2 fTexCoord;
-out vec3 fNormal;
-out vec3 fragPos;
-
-uniform mat4 projView;
-uniform mat4 model;
-uniform mat3 worldNormals;
-
-void main()
-{
-    gl_Position = projView * model * vec4(position, 1.0);
-    fColor = color;
-    fTexCoord = texCoord;
-    fNormal = normalize(worldNormals * normal);
-    fragPos = vec3(model * vec4(position, 1.0));
+    
+    //FragColor.rgb = pow(FragColor.rgb, vec3(1.0/2.2));
 }
 """
 
