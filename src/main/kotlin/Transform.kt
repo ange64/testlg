@@ -1,92 +1,133 @@
-import org.joml.Matrix4f
-import org.joml.Vector3f
-import org.joml.Vector3fc
+import org.joml.*
 
 open class Transform : Transformable {
-    override val matrix: Matrix4f = Matrix4f().identity()
-    override val posC = Vector3f()
-        get() = matrix.getTranslation(field)
-    override val rotC: Vector3fc
-        get() = rot
-    override val sclC: Vector3fc
-        get() = scl
-    //buffers vectors to avoid costly retrieval operation from the matrix
-    private val rot = Vector3f()
-    private val scl = Vector3f()
+    private val matrix: Matrix4f = Matrix4f().identity()
+    private var transformedFlag = false
+    private val translation: Vector3f = Vector3f()
+    private val rotation: Vector3f = Vector3f()
+    private val scale: Vector3f = Vector3f(1f)
+    private val rotQuat = Quaternionf()
 
-    final override fun rotate(x: Float, y: Float, z: Float) {
-        super.rotate(x, y, z)
-        rot.add(x, y, z)
+    override fun getTranslation(): Vector3fc = translation
+
+    override fun getRotation(): Vector3fc = rotQuat.getEulerAnglesXYZ(rotation)
+
+    override fun getScale(): Vector3fc = scale
+
+    override fun rotate(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+        rotQuat.rotate(x, y, z)
     }
 
-    final override fun scale(x: Float, y: Float, z: Float) {
-        super.scale(x, y, z)
-        scl.mul(x, y, z)
+    override fun setRotate(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+        rotQuat.rotation(x, y, z)
+        rotQuat
     }
 
-    final override fun scale(xyz: Float) {
-        super.scale(xyz)
-        scl.mul(xyz)
+    override fun rotateAround(x: Float, y: Float, z: Float, center: Vector3fc) {
+        rotatePosAround(x, y, z, center)
+        rotQuat.rotate(x, y, z)
     }
 
-    final override fun setRotate(x: Float, y: Float, z: Float) {
-        super.setRotate(x, y, z)
-        rot.set(x, y, z)
+    override fun rotatePosAround(x: Float, y: Float, z: Float, center: Vector3fc) {
+        transformedFlag = true
+        translation.sub(center).rotate(BUFFER_QUAT.rotation(x, y, z)).add(center)
     }
 
-    final override fun setScale(x: Float, y: Float, z: Float) {
-        onTransform()
-        scl.div(scl)
-        matrix.scale(scl)
-        matrix.scale(x, y, z)
-        scl.set(x, y, z)
+    override fun translate(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+        translation.add(x, y, z)
+    }
+
+    override fun translateLocal(x: Float, y: Float, z: Float) {
+
+    }
+
+    override fun setTranslate(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+    }
+
+    override fun setScale(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+        scale.set(x, y, z)
+    }
+
+    override fun scale(x: Float, y: Float, z: Float) {
+        transformedFlag = true
+        scale.mul(x, y, z)
+    }
+
+    override fun getTransforms(): Matrix4fc {
+        return matrix
+    }
+
+    override fun transformed() = transformedFlag
+
+    override fun applyTransforms(): Matrix4fc {
+        transformedFlag = false
+        matrix.identity()
+        matrix.m00(matrix.m00() * scale.x)
+        matrix.m11(matrix.m11() * scale.y)
+        matrix.m22(matrix.m22() * scale.z)
+        matrix.rotate(rotQuat).setTranslation(translation)
+        return matrix
+    }
+
+    companion object {
+        private val BUFFER_QUAT = Quaternionf()
     }
 }
 
 interface Transformable {
-    val matrix: Matrix4f
-    val posC: Vector3fc
-    val rotC: Vector3fc
-    val sclC: Vector3fc
 
-    fun rotate(x: Float = 0f, y: Float = 0f, z: Float = 0f) {
-        matrix.rotateXYZ(x, y, z)
-        onTransform()
-    }
+    fun getTranslation(): Vector3fc
 
-    fun translate(x: Float = 0f, y: Float = 0f, z: Float = 0f) {
-        matrix.translate(x, y, z)
-        onTransform()
-    }
+    fun getRotation(): Vector3fc
 
-    fun scale(x: Float = 1f, y: Float = 1f, z: Float = 1f) {
-        matrix.scale(x, y, z)
-        onTransform()
-    }
+    fun getScale(): Vector3fc
 
-    fun scale(xyz : Float) {
-        matrix.scale(xyz)
-        onTransform()
-    }
+    fun rotate(x: Float = 0f, y: Float = 0f, z: Float = 0f)
 
-    fun setRotate(x: Float, y: Float, z: Float) {
-        matrix.setRotationXYZ(x, y, z)
-        onTransform()
-    }
+    fun rotate(xyz: Vector3fc) = rotate(xyz.x(), xyz.y(), xyz.z())
 
-    fun setTranslate(x: Float, y: Float, z: Float) {
-        matrix.setTranslation(x, y, z)
-        onTransform()
-    }
+    fun setRotate(x: Float = 0f, y: Float = 0f, z: Float = 0f)
 
-    fun setTranslate(xyz : Vector3fc) {
-        matrix.setTranslation(xyz)
-        onTransform()
-    }
+    fun setRotate(xyz: Vector3fc) = rotate(xyz.x(), xyz.y(), xyz.z())
 
-    fun setScale(x: Float, y: Float, z: Float) = Unit
+    fun rotateAround(x: Float = 0f, y: Float = 0f, z: Float = 0f, center: Vector3fc)
 
-    fun evenScaling() = sclC.x() == sclC.y() && sclC.x() == sclC.z()
+    fun rotateAround(xyz: Vector3fc, center: Vector3fc) = rotateAround(xyz.x(), xyz.y(), xyz.z(), center)
 
-    fun onTransform() = Unit
+    fun rotatePosAround(x: Float = 0f, y: Float = 0f, z: Float = 0f, center: Vector3fc)
+
+    fun rotatePosAround(xyz: Vector3fc, center: Vector3fc) = rotateAround(xyz.x(), xyz.y(), xyz.z(), center)
+
+    fun translate(x: Float, y: Float, z: Float)
+
+    fun translate(xyz: Vector3fc) = translate(xyz.x(), xyz.y(), xyz.z())
+
+    fun translateLocal(x: Float, y: Float, z: Float)
+
+    fun translateLocal(xyz: Vector3fc) = translateLocal(xyz.x(), xyz.y(), xyz.z())
+
+    fun setTranslate(x: Float, y: Float, z: Float)
+
+    fun setTranslate(xyz: Vector3fc) = setTranslate(xyz.x(), xyz.y(), xyz.z())
+
+    fun setScale(x: Float, y: Float, z: Float)
+
+    fun setScale(xyz: Vector3fc) = setScale(xyz.x(), xyz.y(), xyz.z())
+
+    fun scale(x: Float, y: Float, z: Float)
+
+    fun scale(factor: Float) = scale(factor, factor, factor)
+
+    fun scale(xyz: Vector3fc) = scale(xyz.x(), xyz.y(), xyz.z())
+
+    fun getTransforms(): Matrix4fc
+
+    fun transformed(): Boolean
+
+    fun applyTransforms(): Matrix4fc
 }

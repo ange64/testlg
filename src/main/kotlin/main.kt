@@ -1,6 +1,6 @@
 import org.joml.Matrix4fc
 import org.joml.Vector3f
-import org.lwjgl.opengl.GL11.*
+import org.lwjgl.opengl.GL11.glClearColor
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -11,7 +11,7 @@ class AppIml : App() {
     private val vao = ModelVao()
     private val shader = LightingShader(vertexShad, objectFragShad)
     private val models = mutableListOf<Model>()
-    private val camera = FpsCamera(90f, 100f, 16.0f / 9)
+    private val camera = FpsCamera(90f, 10000f, 16.0f / 9)
 
     private val light = PointLight(
         Vector3f(WHITE), range = 200f, pos = Vector3f(0f, 5f, 0f),
@@ -26,14 +26,16 @@ class AppIml : App() {
     private val rnd = Random(3453)
 
     override fun init() {
-        camera.setPos(0f, 2f, 0f)
+        camera.setPos(-10f, 2f, 0f)
+
         genGround()
-        for (i in 0..10) genBoxes(15f)
+        for (i in 0..10) genBoxes(20f)
         models.add(lightModel)
-        lightModel.scale(0.3f)
-        lightModel.setTranslate(light.pos)
+        lightModel.scale(0.3f, 0.3f, 0.3f)
+        lightModel.translate(light.pos)
         val sphere = Sphere(Material.smoothGray)
         sphere.translate(10f, 10f, 10f)
+
         models.add(sphere)
         shader.use()
         shader.addLight(light)
@@ -57,21 +59,14 @@ class AppIml : App() {
         shader.updateLightPos(spotLight)
 
         light.color.set(x, 1f, z)
-        shader.updateLightColor(light)
+        //shader.updateLightColor(light)
     }
 
     private fun render(viewProj: Matrix4fc) {
         shader.setUniform("projView", viewProj)
         shader.setUniform("viewPos", camera.pos)
         vao.bind()
-        models.forEach {
-            it.bind()
-            vao.initAttributes()
-            shader.setUniform("model", it.matrix)
-            shader.setUniform("worldNormals", it.worldNormalsC)
-            it.material.bind(shader)
-            glDrawElements(GL_TRIANGLES, it.data.indices)
-        }
+        models.forEach { it.render(shader, vao) }
     }
 
     private fun genGround() {
@@ -80,13 +75,12 @@ class AppIml : App() {
     }
 
     private fun genBoxes(mapSize: Float) {
-        val size = rnd.nextFloat() * 10 + 1
+        val size = rnd.nextFloat() * 10 + 3
         val x = rnd.nextFloat().mapOne(-mapSize, mapSize)
         val z = rnd.nextFloat().mapOne(-mapSize, mapSize)
         val cube = Cube(material = Material.woodCrate)
-         cube.rotate(rnd.nextFloat() * PI,rnd.nextFloat() * PI,rnd.nextFloat() * PI)
-
-        cube.setTranslate(x.rounded(), size / 2, z.rounded())
+        cube.rotate(rnd.nextFloat() * PI, rnd.nextFloat() * PI, rnd.nextFloat() * PI)
+        cube.translate(x.rounded(), size / 2, z.rounded())
         models.add(cube)
     }
 
@@ -102,12 +96,13 @@ class AppIml : App() {
         if (Key.S in keys) camera.backward()
         if (Key.A in keys) camera.left()
         if (Key.D in keys) camera.right()
+
     }
 
     override fun keyPressed(keys: Set<Key>, mods: Modifiers) {
         if (Key.C in keys) camera.zoom(2f)
         if (Key.Escape in keys) window.freeCursor()
-        if( Key.Z in keys) toggleWireFrame()
+        if (Key.Z in keys) toggleWireFrame()
     }
 
     override fun keyReleased(keys: Set<Key>, mods: Modifiers) {

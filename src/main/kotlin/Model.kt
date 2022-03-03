@@ -1,5 +1,6 @@
 import org.joml.Matrix3f
 import org.joml.Matrix3fc
+import org.joml.Matrix4fc
 import org.lwjgl.opengl.GL13C
 import org.lwjgl.opengl.GL15.*
 
@@ -14,6 +15,7 @@ open class Model(
 ) : Transform() {
 
     private val vboId = glGenBuffers()
+    private val normalsMatrix = Matrix3f()
 
     init {
         glBindBuffer(GL_ARRAY_BUFFER, vboId)
@@ -24,17 +26,23 @@ open class Model(
         )
     }
 
-    private val worldNormals = Matrix3f(matrix)
-    val worldNormalsC: Matrix3fc
-        get() = worldNormals
-
-    override fun onTransform() {
-        if (evenScaling()) worldNormals.set(matrix)
-        else matrix.normal(worldNormals)
-    }
+    fun getNormalsMatrix() = normalsMatrix as Matrix3fc
 
     open fun bind() {
         glBindBuffer(GL_ARRAY_BUFFER, vboId)
+    }
+
+    open fun render(shader: Shader, vao: Vao) {
+        this.bind()
+        if( transformed()) {
+            super.applyTransforms()
+            getTransforms().normal(normalsMatrix)
+        }
+        vao.initAttributes()
+        shader.setUniform("model", this.getTransforms())
+        shader.setUniform("worldNormals", this.getNormalsMatrix())
+        this.material.bind(shader)
+        glDrawElements(GL_TRIANGLES, this.data.indices)
     }
 }
 
