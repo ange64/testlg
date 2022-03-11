@@ -1,6 +1,6 @@
 import org.joml.*
 
-open class Transform : Transformable {
+class Transform : Transformable {
     private val matrix: Matrix4f = Matrix4f().identity()
     private var transformedFlag = false
     private val translation: Vector3f = Vector3f()
@@ -38,10 +38,6 @@ open class Transform : Transformable {
     override fun translate(x: Float, y: Float, z: Float) {
         transformedFlag = true
         translation.add(x, y, z)
-    }
-
-    override fun translateLocal(x: Float, y: Float, z: Float) {
-
     }
 
     override fun setTranslate(x: Float, y: Float, z: Float) {
@@ -107,9 +103,9 @@ interface Transformable {
 
     fun translate(xyz: Vector3fc) = translate(xyz.x(), xyz.y(), xyz.z())
 
-    fun translateLocal(x: Float, y: Float, z: Float)
+    //fun translateLocal(x: Float, y: Float, z: Float)
 
-    fun translateLocal(xyz: Vector3fc) = translateLocal(xyz.x(), xyz.y(), xyz.z())
+    //fun translateLocal(xyz: Vector3fc) = translateLocal(xyz.x(), xyz.y(), xyz.z())
 
     fun setTranslate(x: Float, y: Float, z: Float)
 

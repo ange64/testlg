@@ -1,95 +1,106 @@
-import org.joml.Vector3f
-import org.joml.Vector3fc
 import org.lwjgl.opengl.ARBFramebufferObject.glGenerateMipmap
 import org.lwjgl.opengl.GL11.*
 import org.lwjgl.opengl.GL12C.GL_CLAMP_TO_EDGE
-import org.lwjgl.opengl.GL13.GL_TEXTURE0
 import org.lwjgl.opengl.GL13.glActiveTexture
-import org.lwjgl.opengl.GL13C.GL_TEXTURE1
-import org.lwjgl.opengl.GL13C.GL_TEXTURE2
 import org.lwjgl.opengl.GL14C.GL_MIRRORED_REPEAT
 import org.lwjgl.stb.STBImage
 import java.nio.ByteBuffer
+import java.text.Format
 
 @Suppress("MemberVisibilityCanBePrivate")
-class Texture(
-    image: Image,
-    filteringMin: MinFilter = MinFilter.LINEAR_BOTH,
-    filteringMag: MagFilter = MagFilter.NEAREST,
-    wrapU: Wrap = Wrap.REPEAT,
-    wrapV: Wrap = Wrap.REPEAT,
 
-    ) {
-    constructor(
-        path: String,
-        filteringMin: MinFilter = MinFilter.LINEAR_BOTH,
-        filteringMag: MagFilter = MagFilter.NEAREST,
-        wrapU: Wrap = Wrap.REPEAT,
-        wrapV: Wrap = Wrap.REPEAT
-    ) : this(Image(path), filteringMin, filteringMag, wrapU, wrapV)
+interface Texture {
+    val textureId: Int
+    val mapper : PixelFormatMapper
 
-    val textureId: Int = glGenTextures()
-    val width: Int = image.width
-    val height: Int = image.height
-    val format: Int = image.format
+    fun getWidth(): Int
+
+    fun getHeight(): Int
+
+    fun getFormat(): PixelFormat
+
+    fun setWrap(sAxis: Wrap, tAxis: Wrap = sAxis): Texture
+
+    fun setFiltering(minifying: MinFilter, magnifying: MagFilter): Texture
+
+    fun bind(activeTarget: Int)
+
+    fun setData(width: Int, height: Int, format: PixelFormat, pixels: ByteBuffer?)
+
+    fun dispose()
+
+}
+
+
+class TextureGl(
+    private var width: Int,
+    private var height: Int,
+    private var format: PixelFormat,
+    pixels: ByteBuffer?
+) : Texture {
+    override val textureId = glGenTextures()
+    override val mapper = PixelFormatMapperGl()
+
+    constructor(image: Image) : this(image.width, image.height, image.format, image.pixels)
+
+    constructor(path: String) : this(Image(path))
 
     init {
         glBindTexture(GL_TEXTURE_2D, textureId)
-        setWrap(wrapU, wrapV)
-        setFiltering(filteringMin, filteringMag)
+        setWrap(Wrap.REPEAT, Wrap.REPEAT)
+        setFiltering(MinFilter.LINEAR_BOTH, MagFilter.LINEAR)
         glTexImage2D(
-            GL_TEXTURE_2D, 0, format, width, height,
-            0, format, GL_UNSIGNED_BYTE, image.pixels
+            GL_TEXTURE_2D, 0, format.converted(mapper), width, height,
+            0, format.converted(mapper), GL_UNSIGNED_BYTE, pixels
         )
         glGenerateMipmap(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, 0)
     }
 
-    private fun setWrap(sAxis: Wrap, tAxis: Wrap = sAxis): Texture {
+    override fun setWrap(sAxis: Wrap, tAxis: Wrap): TextureGl {
+        glBindTexture(GL_TEXTURE_2D, textureId)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, tAxis.value)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sAxis.value)
         return this
     }
 
-    private fun setFiltering(minifying: MinFilter, magnifying: MagFilter): Texture {
+    override fun setFiltering(minifying: MinFilter, magnifying: MagFilter): TextureGl {
+        glBindTexture(GL_TEXTURE_2D, textureId)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minifying.value)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magnifying.value)
         return this
     }
 
-    fun bind(activeTarget: Int = GL_TEXTURE0) {
+     override fun bind(activeTarget: Int) {
         glActiveTexture(activeTarget)
         glBindTexture(GL_TEXTURE_2D, textureId)
     }
 
-    companion object{
-        val BLACK = Texture("textures/black.png")
-        val WHITE = Texture("textures/white.png")
+    override fun getWidth() = width
+
+    override fun getHeight() = height
+
+    override fun getFormat() = format
+
+    override fun setData(width: Int, height: Int, format: PixelFormat, pixels: ByteBuffer?) {
+        this.width = width
+        this.height = height
+        this.format = format
+
+        glBindTexture(GL_TEXTURE_2D, textureId)
+        glTexImage2D(
+            GL_TEXTURE_2D, 0, format.converted(mapper), width, height,
+            0, format.converted(mapper), GL_UNSIGNED_BYTE, pixels
+        )
+        glGenerateMipmap(GL_TEXTURE_2D)
+    }
+
+    override fun dispose() {
+        glDeleteTextures(textureId)
     }
 }
 
-class Image(path: String) {
-    lateinit var pixels: ByteBuffer
-        private set
-    var format: Int = 0
-        private set
-    var width: Int = 0
-        private set
-    var height: Int = 0
-        private set
 
-    init {
-        useStack {
-            val wBuffer = it.mallocInt(1)
-            val hBuffer = it.mallocInt(1)
-            val channels = it.mallocInt(1)
-            pixels = STBImage.stbi_load(path, wBuffer, hBuffer, channels, 0)!!
-            format = if (channels[0] == 4) GL_RGBA else GL_RGB
-            width = wBuffer[0]
-            height = wBuffer[0]
-        }
-    }
-}
+
 
 enum class Wrap(val value: Int) {
     REPEAT(GL_REPEAT),

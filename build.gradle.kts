@@ -22,6 +22,7 @@ val compileTestKotlin: KotlinCompile by tasks
 
 compileKotlin.kotlinOptions {
     jvmTarget = "11"
+    languageVersion = "1.5"
 }
 compileTestKotlin.kotlinOptions {
     jvmTarget = "11"

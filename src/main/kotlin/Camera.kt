@@ -2,7 +2,6 @@ import org.joml.*
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.time.Duration
-import kotlin.time.ExperimentalTime
 
 const val DEF_NEAR = 0.1F
 const val MAX_UP_ANGLE = 89.9f * 2 * PI / 360
@@ -12,13 +11,11 @@ val UP: Vector3fc = Vector3f(0f, 1f, 0f)
 
 abstract class Camera(
     fov: Float,
-    renderDistance: Float,
-    aspect: Float
+    var renderDistance: Float,
+    var aspect: Float
 ) {
-
     private val proj = Matrix4f().perspective(fov.rad(), aspect, DEF_NEAR, renderDistance)
     private val view = Matrix4f()
-
     val pos = Vector3f()
     val rot = Vector3f()
     val dir = Vector3f()
@@ -28,8 +25,8 @@ abstract class Camera(
     var fovDefault = fov
         private set
     var currentFov = fov
-    var renderDistance = renderDistance
-    var aspect = aspect
+
+    abstract fun update(delta: Duration)
 
     fun getUpdatedProjection(): Matrix4fc {
         return proj.identity().perspective(currentFov.rad(), aspect, DEF_NEAR, renderDistance)
@@ -39,7 +36,7 @@ abstract class Camera(
         return view.setLookAt(pos, dir.copy.add(pos), upAxis)
     }
 
-    fun getViewProj() = getUpdatedProjection().copy.mul(getUpdatedView())
+    fun getViewProj(): Matrix4f = getUpdatedProjection().copy.mul(getUpdatedView())
 
     fun zoom(factor: Float) {
         currentFov = fovDefault / factor
@@ -56,20 +53,12 @@ class FpsCamera(
     renderDistance: Float,
     aspect: Float
 ) : Camera( fov,renderDistance,aspect){
-    private val proj = Matrix4f().perspective(fov.rad(), aspect, DEF_NEAR, renderDistance)
-    private val view = Matrix4f()
 
-    var speed = 0f
-    var speedFactor = 10f
+    var speed = 10f
+    private var speedFinal = 0f
 
-    fun viewProj(): Matrix4fc {
-        view.setLookAt(pos, dir.copy.add(pos), UP)
-        return proj.copy.mul(view)
-    }
-
-    @ExperimentalTime
-    fun update(delta: Duration) {
-        speed = (delta.inSeconds * speedFactor).toFloat()
+    override fun update(delta: Duration) {
+        speedFinal = (delta.inSeconds * speed).toFloat()
     }
 
     fun setPos(x: Float, y: Float, z: Float) {
@@ -77,19 +66,19 @@ class FpsCamera(
     }
 
     fun forward() {
-        pos.add(dir.copy.mul(speed))
+        pos.add(dir.copy.mul(speedFinal))
     }
 
     fun backward() {
-        pos.add(dir.copy.mul(-speed))
+        pos.add(dir.copy.mul(-speedFinal))
     }
 
     fun left() {
-        pos.add(xAxis.copy.mul(-speed))
+        pos.add(xAxis.copy.mul(-speedFinal))
     }
 
     fun right() {
-        pos.add(xAxis.copy.mul(speed))
+        pos.add(xAxis.copy.mul(speedFinal))
     }
 
     fun rotate(xa: Float, ya: Float, za: Float): FpsCamera {

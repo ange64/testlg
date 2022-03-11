@@ -1,21 +1,30 @@
-import org.joml.Vector3f
 import org.junit.Test
 
 
 
-class TestClass {
 
-    @Test
-    fun testObjParser(){
-        val modelData = objToModelData("cube.obj")
-        modelData.verticesData.forEach {
-        }
-        for(i in 0 .. modelData.verticesData.lastIndex - 7 step 8) {
-            for( j in 0..7) {
-                print(modelData.verticesData[i+j])
-                print(", ")
-            }
-            println()
+
+class ListNode(var `val`: Int) {
+    var next: ListNode? = null
+
+    constructor(vararg intArray: Int) : this(intArray[0]) {
+        var pointer = this
+        for (i in 1..intArray.lastIndex) {
+            pointer.next = ListNode(intArray[i])
+            pointer = pointer.next!!
         }
     }
+
+
+    override fun toString(): String {
+        val builder = StringBuilder("[")
+        var pointer: ListNode? = this
+        while (pointer != null) {
+            builder.append(pointer.`val`)
+            builder.append(',')
+            pointer = pointer.next
+        }
+        return builder.deleteCharAt(builder.lastIndex).append(']').toString()
+    }
 }
+
